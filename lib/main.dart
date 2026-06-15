@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:encrypted_shared_preferences/encrypted_shared_preferences.dart';
 
 void main() {
   runApp(const MyApp());
@@ -11,157 +12,143 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: RecipePage(),
+      home: LoginPage(),
     );
   }
 }
 
-class RecipePage extends StatelessWidget {
-  const RecipePage({super.key});
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
+
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final EncryptedSharedPreferences encryptedPrefs =
+  EncryptedSharedPreferences();
+
+  final TextEditingController usernameController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    loadSavedLogin();
+  }
+
+  Future<void> loadSavedLogin() async {
+    String username = await encryptedPrefs.getString("username");
+    String password = await encryptedPrefs.getString("password");
+
+    if (username.isNotEmpty && password.isNotEmpty) {
+      usernameController.text = username;
+      passwordController.text = password;
+
+      print("LOADED FROM SHARED PREFERENCES");
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "Previous login name and password have been loaded",
+            ),
+          ),
+        );
+      });
+    }
+  }
+
+  void showSaveLoginDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Save Login?"),
+          content: const Text(
+            "Would you like to save your username and password for next time?",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await encryptedPrefs.clear();
+
+                if (mounted) {
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text("No"),
+            ),
+            TextButton(
+              onPressed: () async {
+                await encryptedPrefs.setString(
+                  "username",
+                  usernameController.text,
+                );
+
+                await encryptedPrefs.setString(
+                  "password",
+                  passwordController.text,
+                );
+
+                if (mounted) {
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text("Yes"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    usernameController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Favorite Recipes"),
+        title: const Text("Login Page"),
       ),
-      body: SingleChildScrollView(
-        child: createLayout(context),
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: 0,
-        selectedItemColor: Colors.blue,
-        unselectedItemColor: Colors.grey,
-        onTap: (index) {},
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: ""),
-          BottomNavigationBarItem(icon: Icon(Icons.search), label: ""),
-          BottomNavigationBarItem(icon: Icon(Icons.favorite_border), label: ""),
-          BottomNavigationBarItem(icon: Icon(Icons.chat_bubble_outline), label: ""),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: ""),
-        ],
-      ),
-    );
-  }
-
-  Widget createLayout(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween, // ✅ FIXED: satisfies mark #2
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              recipeCard(
-                context,
-                "assets/images/1.jpeg",
-                "Veggie Stir-fry",
-                "Colorful, crisp, vibrant",
-              ),
-              recipeCard(
-                context,
-                "assets/images/2.jpeg",
-                "Caesar Salad",
-                "Crisp, creamy, tangy",
-              ),
-            ],
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              recipeCard(
-                context,
-                "assets/images/3.jpeg",
-                "Sushi Rolls",
-                "Fresh, delicate, flavorful",
-              ),
-              recipeCard(
-                context,
-                "assets/images/4.jpeg",
-                "Chocolate Brownie",
-                "Rich, fudgy, sweet",
-              ),
-            ],
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              recipeCard(
-                context,
-                "assets/images/5.jpeg",
-                "Grilled Salmon",
-                "Juicy, smoky, healthy",
-              ),
-              recipeCard(
-                context,
-                "assets/images/6.jpeg",
-                "Beef Tacos",
-                "Spicy, crunchy, tasty",
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget recipeCard(
-      BuildContext context,
-      String imagePath,
-      String title,
-      String description,
-      ) {
-    return Container(
-      width: MediaQuery.of(context).size.width * 0.42,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Stack(
-            alignment: Alignment.topRight,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: Image.asset(
-                  imagePath,
-                  width: double.infinity,
-                  height: 110,
-                  fit: BoxFit.cover,
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextField(
+                  controller: usernameController,
+                  decoration: const InputDecoration(
+                    labelText: "Username",
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
-              const Padding(
-                padding: EdgeInsets.all(8),
-                child: Icon(
-                  Icons.favorite,
-                  color: Colors.white,
-                  size: 24,
+                const SizedBox(height: 16),
+                TextField(
+                  controller: passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: "Password",
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 15,
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: showSaveLoginDialog,
+                  child: const Text("Login"),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            description,
-            style: const TextStyle(
-              color: Colors.grey,
-              fontSize: 13,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
