@@ -17,6 +17,7 @@ class _ListPageState extends State<ListPage> {
   final ShoppingItemDao _dao = ShoppingItemDao.instance;
 
   List<ShoppingItem> shoppingList = [];
+  ShoppingItem? selectedItem;
 
   @override
   void initState() {
@@ -55,38 +56,159 @@ class _ListPageState extends State<ListPage> {
     await loadItems();
   }
 
-  void deleteItem(int index) {
-    showDialog(
+  Future<void> deleteSelectedItem() async {
+    final item = selectedItem;
+
+    if (item == null) return;
+
+    final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text("Delete Item"),
-          content: const Text("Do you want to delete this item?"),
+          content: Text("Delete ${item.name}?"),
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(dialogContext);
+                Navigator.pop(dialogContext, false);
               },
               child: const Text("No"),
             ),
             TextButton(
-              onPressed: () async {
-                final item = shoppingList[index];
-
-                if (item.id != null) {
-                  await _dao.deleteItem(item.id!);
-                }
-
-                if (!mounted) return;
-
-                Navigator.pop(dialogContext);
-                await loadItems();
+              onPressed: () {
+                Navigator.pop(dialogContext, true);
               },
               child: const Text("Yes"),
             ),
           ],
         );
       },
+    );
+
+    if (shouldDelete != true) return;
+
+    if (item.id != null) {
+      await _dao.deleteItem(item.id!);
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      selectedItem = null;
+    });
+
+    await loadItems();
+  }
+
+  Widget buildItemList() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          TextField(
+            controller: _itemController,
+            decoration: const InputDecoration(
+              labelText: "Item Name",
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _quantityController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: "Quantity",
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 10),
+          ElevatedButton(
+            onPressed: addItem,
+            child: const Text("Add"),
+          ),
+          const SizedBox(height: 20),
+          Expanded(
+            child: shoppingList.isEmpty
+                ? const Center(
+              child: Text("There are no items in the list"),
+            )
+                : ListView.builder(
+              itemCount: shoppingList.length,
+              itemBuilder: (context, index) {
+                final item = shoppingList[index];
+
+                return ListTile(
+                  title: Text(item.name),
+                  subtitle: Text(
+                    "Quantity: ${item.quantity}",
+                  ),
+                  selected: selectedItem?.id == item.id,
+                  onTap: () {
+                    setState(() {
+                      selectedItem = item;
+                    });
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildDetailsPage() {
+    final item = selectedItem;
+
+    if (item == null) {
+      return const Center(
+        child: Text(
+          "Select an item to view its details",
+          style: TextStyle(fontSize: 18),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            "Item Details",
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          const SizedBox(height: 30),
+          Text(
+            "Name: ${item.name}",
+            style: const TextStyle(fontSize: 20),
+          ),
+          const SizedBox(height: 15),
+          Text(
+            "Quantity: ${item.quantity}",
+            style: const TextStyle(fontSize: 20),
+          ),
+          const SizedBox(height: 15),
+          Text(
+            "Database ID: ${item.id}",
+            style: const TextStyle(fontSize: 20),
+          ),
+          const SizedBox(height: 30),
+          ElevatedButton(
+            onPressed: deleteSelectedItem,
+            child: const Text("Delete"),
+          ),
+          const SizedBox(height: 10),
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                selectedItem = null;
+              });
+            },
+            child: const Text("Close"),
+          ),
+        ],
+      ),
     );
   }
 
@@ -103,56 +225,32 @@ class _ListPageState extends State<ListPage> {
       appBar: AppBar(
         title: const Text("Shopping List"),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            TextField(
-              controller: _itemController,
-              decoration: const InputDecoration(
-                labelText: "Item Name",
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _quantityController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: "Quantity",
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: addItem,
-              child: const Text("Add"),
-            ),
-            const SizedBox(height: 20),
-            Expanded(
-              child: shoppingList.isEmpty
-                  ? const Center(
-                child: Text("There are no items in the list"),
-              )
-                  : ListView.builder(
-                itemCount: shoppingList.length,
-                itemBuilder: (context, index) {
-                  final item = shoppingList[index];
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isTabletOrDesktop = constraints.maxWidth >= 600;
 
-                  return ListTile(
-                    title: Text(item.name),
-                    subtitle: Text(
-                      "Quantity: ${item.quantity}",
-                    ),
-                    onLongPress: () {
-                      deleteItem(index);
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
+          if (isTabletOrDesktop) {
+            return Row(
+              children: [
+                Expanded(
+                  flex: 1,
+                  child: buildItemList(),
+                ),
+                const VerticalDivider(width: 1),
+                Expanded(
+                  flex: 1,
+                  child: buildDetailsPage(),
+                ),
+              ],
+            );
+          }
+
+          if (selectedItem != null) {
+            return buildDetailsPage();
+          }
+
+          return buildItemList();
+        },
       ),
     );
   }
