@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:encrypted_shared_preferences/encrypted_shared_preferences.dart';
 
+import 'pages/list_page.dart';
+import 'repository/profile_repository.dart';
+
 void main() {
   runApp(const MyApp());
 }
@@ -11,143 +14,202 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const MaterialApp(
+      home: ListPage(),
       debugShowCheckedModeBanner: false,
-      home: LoginPage(),
     );
   }
 }
 
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+class MyHomePage extends StatefulWidget {
+  const MyHomePage({super.key, required this.title});
+
+  final String title;
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  State<MyHomePage> createState() => _MyHomePageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
-  final EncryptedSharedPreferences encryptedPrefs =
+class _MyHomePageState extends State<MyHomePage> {
+  final TextEditingController _loginController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+
+  final EncryptedSharedPreferences encryptedSharedPreferences =
   EncryptedSharedPreferences();
 
-  final TextEditingController usernameController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
+  final ProfileRepository repository = ProfileRepository();
+
+  String imageSource = "images/question-mark.jpg";
 
   @override
   void initState() {
     super.initState();
     loadSavedLogin();
+    repository.loadData();
+  }
+
+  @override
+  void dispose() {
+    _loginController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   Future<void> loadSavedLogin() async {
-    String username = await encryptedPrefs.getString("username");
-    String password = await encryptedPrefs.getString("password");
+    String savedLogin =
+    await encryptedSharedPreferences.getString('loginName');
 
-    if (username.isNotEmpty && password.isNotEmpty) {
-      usernameController.text = username;
-      passwordController.text = password;
+    String savedPassword =
+    await encryptedSharedPreferences.getString('password');
 
-      print("LOADED FROM SHARED PREFERENCES");
+    if (savedLogin.isNotEmpty && savedPassword.isNotEmpty) {
+      setState(() {
+        _loginController.text = savedLogin;
+        _passwordController.text = savedPassword;
+      });
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              "Previous login name and password have been loaded",
-            ),
+            content: Text('Previous login name and password loaded'),
           ),
         );
       });
     }
   }
 
-  void showSaveLoginDialog() {
-    showDialog(
+  Future<void> saveLoginInfo() async {
+    await encryptedSharedPreferences.setString(
+      'loginName',
+      _loginController.text,
+    );
+
+    await encryptedSharedPreferences.setString(
+      'password',
+      _passwordController.text,
+    );
+  }
+
+  Future<void> clearSavedLoginInfo() async {
+    await encryptedSharedPreferences.clear();
+
+    _loginController.clear();
+    _passwordController.clear();
+  }
+
+  Future<void> showSaveLoginDialog() async {
+    bool? save = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text("Save Login?"),
+          title: const Text('Save Login?'),
           content: const Text(
-            "Would you like to save your username and password for next time?",
+            'Would you like to save your login name and password for next time?',
           ),
           actions: [
             TextButton(
-              onPressed: () async {
-                await encryptedPrefs.clear();
-
-                if (mounted) {
-                  Navigator.pop(context);
-                }
+              onPressed: () {
+                Navigator.pop(context, true);
               },
-              child: const Text("No"),
+              child: const Text('Yes'),
             ),
             TextButton(
-              onPressed: () async {
-                await encryptedPrefs.setString(
-                  "username",
-                  usernameController.text,
-                );
-
-                await encryptedPrefs.setString(
-                  "password",
-                  passwordController.text,
-                );
-
-                if (mounted) {
-                  Navigator.pop(context);
-                }
+              onPressed: () {
+                Navigator.pop(context, false);
               },
-              child: const Text("Yes"),
+              child: const Text('No'),
             ),
           ],
         );
       },
     );
+
+    if (save == true) {
+      await saveLoginInfo();
+    } else if (save == false) {
+      await clearSavedLoginInfo();
+    }
   }
 
-  @override
-  void dispose() {
-    usernameController.dispose();
-    passwordController.dispose();
-    super.dispose();
+  Future<void> loginButtonClicked() async {
+    String password = _passwordController.text;
+
+    setState(() {
+      if (password == "ASDF") {
+        imageSource = "images/light-bulb.jpg";
+      } else {
+        imageSource = "images/stop-sign.jpg";
+      }
+    });
+
+    await showSaveLoginDialog();
+
+    if (!mounted) return;
+
+    if (password == "ASDF") {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Welcome Back ${_loginController.text}"),
+        ),
+      );
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const ListPage(),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Login Page"),
+        title: Text(widget.title),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Center(
-          child: SizedBox(
-            width: 400,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                TextField(
-                  controller: usernameController,
-                  decoration: const InputDecoration(
-                    labelText: "Username",
-                    border: OutlineInputBorder(),
-                  ),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: TextField(
+                controller: _loginController,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: "Login name",
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: passwordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: "Password",
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: showSaveLoginDialog,
-                  child: const Text("Login"),
-                ),
-              ],
+              ),
             ),
-          ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: TextField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: "Password",
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: ElevatedButton(
+                onPressed: loginButtonClicked,
+                child: const Text("Login"),
+              ),
+            ),
+            Semantics(
+              label: "Login result image",
+              child: Image.asset(
+                imageSource,
+                width: 300,
+                height: 300,
+              ),
+            ),
+          ],
         ),
       ),
     );
